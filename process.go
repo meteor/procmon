@@ -20,7 +20,7 @@ type Measure struct {
 	User float64
 	// System is the % of kernel mode CPU time used
 	System float64
-	// Memory is the amount of memory used
+	// Memory is the amount of memory used in kB
 	Memory uint64
 }
 
@@ -189,26 +189,50 @@ func (m *Monitor) Monitor() {
 			if err != nil {
 				log.WithField("process", m.process).WithError(err).
 					Error("couldn't read process stats")
+				m.ticker.Stop()
+				close(m.Output)
+				return
 			}
 			memory, err := m.fetchProcessMemory()
 			if err != nil {
 				log.WithField("process", m.process).WithError(err).
 					Error("couldn't read process stats")
+				m.ticker.Stop()
+				close(m.Output)
+				return
 			}
 			newtotal, err := m.fetchTotalUsage()
 			if err != nil {
+				// this is a weird one, as it indicates something has
+				// gone seriously haywire.  Still, closing as normal.
 				log.WithField("process", m.process).WithError(err).
 					Error("couldn't read total CPU stats")
+				m.ticker.Stop()
+				close(m.Output)
+				return
 			}
 			userTotalDiff := newtotal.user - m.total.user
 			sysTotalDiff := newtotal.system - m.total.system
 
-			userPerc := 100.0 * float64(newtarget.user-m.stats.user) /
-				float64(userTotalDiff)
-			sysPerc := 100.0 * float64(newtarget.system-m.stats.system) /
-				float64(sysTotalDiff)
+			var userPerc, sysPerc float64
+			if userTotalDiff == 0 {
+				userPerc = 0.0
+			} else {
+				userPerc = 100.0 * float64(newtarget.user-m.stats.user) /
+					float64(userTotalDiff)
+			}
+			if sysTotalDiff == 0 {
+				sysPerc = 0.0
+			} else {
+				sysPerc = 100.0 * float64(newtarget.system-m.stats.system) /
+					float64(sysTotalDiff)
+			}
 
-			m.Output <- Measure{userPerc, sysPerc, memory}
+			select {
+			case m.Output <- Measure{userPerc, sysPerc, memory}:
+			default:
+				log.WithField("process", m.process).Warn("Output full, dropping update")
+			}
 			m.stats = newtarget
 			m.total = newtotal
 		case <-m.done:
