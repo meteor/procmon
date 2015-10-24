@@ -68,21 +68,21 @@ func (m *Monitor) preflight() error {
 }
 
 func parseProcStat(in io.Reader) (point, error) {
-	// per proc(5) we are after fields cutime and cstime, numbers 16
-	// and 17.
+	// per proc(5) we are after fields utime and stime, numbers 14
+	// and 15.
 	contents, err := ioutil.ReadAll(in)
 	if err != nil {
 		return point{}, err
 	}
 	fields := strings.Split(string(contents), " ")
-	if len(fields) < 17 {
+	if len(fields) < 15 {
 		return point{}, fmt.Errorf("Not enough fields")
 	}
-	cutime, err := strconv.ParseUint(fields[15], 10, 64)
+	cutime, err := strconv.ParseUint(fields[13], 10, 64)
 	if err != nil {
 		return point{}, err
 	}
-	cstime, err := strconv.ParseUint(fields[16], 10, 64)
+	cstime, err := strconv.ParseUint(fields[14], 10, 64)
 	if err != nil {
 		return point{}, err
 	}
