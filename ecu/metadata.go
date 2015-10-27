@@ -2,7 +2,6 @@ package ecu
 
 import (
 	"fmt"
-	log "github.com/Sirupsen/logrus"
 	"io/ioutil"
 	"net/http"
 )
@@ -19,11 +18,6 @@ func Mine() (*Instance, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.WithFields(log.Fields{
-		"body":      body,
-		"as string": string(body),
-		"bytes":     []byte("m1.medium"),
-	}).Info("body is")
 	instance, ok := LookupName(string(body))
 	if !ok {
 		return nil, fmt.Errorf("Couldn't find instance type %q %q", body, instance)

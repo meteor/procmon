@@ -23,9 +23,7 @@ func main() {
 	}
 
 	instance, err := ecu.Mine()
-	if err == nil {
-		log.WithField("type", instance.APIName)
-	} else {
+	if err != nil {
 		log.WithError(err).Error("Couldn't find instance metadata")
 	}
 
@@ -44,20 +42,39 @@ outerloop:
 				log.Warn("Not ok, breaking")
 				break outerloop
 			}
-			var userScaled, systemScaled float64
-			if instance == nil {
-				userScaled = math.NaN()
-				systemScaled = math.NaN()
+			userSysTotal := point.UserTotal + point.SystemTotal
+			var userPerc, sysPerc, userECU, sysECU float64
+			if point.UserTotal == 0 {
+				userPerc = 0.0
 			} else {
-				userScaled = float64(instance.ComputeUnitsx10) * point.User / 10.0
-				systemScaled = float64(instance.ComputeUnitsx10) * point.System / 10.0
+				userPerc = 100.0 * float64(point.User) / float64(point.UserTotal)
+			}
+			if point.SystemTotal == 0 {
+				sysPerc = 0.0
+			} else {
+				sysPerc = 100.0 * float64(point.System) / float64(point.SystemTotal)
+			}
+			if instance == nil {
+				userECU = math.NaN()
+				sysECU = math.NaN()
+			} else {
+				log.WithFields(log.Fields{
+					"instance":     instance,
+					"instance CPU": instance.ComputeUnitsx10,
+					"userSysTotal": userSysTotal,
+					"numerator":    float64(instance.ComputeUnitsx10) * float64(point.User),
+					"denominator":  (float64(userSysTotal) * 10.0),
+				}).Debug("computing")
+				userECU = float64(instance.ComputeUnitsx10) * float64(point.User) / (float64(userSysTotal) * 10.0)
+				sysECU = float64(instance.ComputeUnitsx10) * float64(point.System) / (float64(userSysTotal) * 10.0)
 			}
 			log.WithFields(log.Fields{
-				"user":      point.User,
-				"system":    point.System,
-				"userInECU": userScaled,
-				"sysInECU":  systemScaled,
-				"memory":    point.Memory,
+				"point":      point,
+				"user":       userPerc,
+				"system":     sysPerc,
+				"userInECU":  userECU,
+				"sysInECU":   sysECU,
+				"memoryInKB": point.Memory,
 			}).Info("Got point")
 		}
 	}

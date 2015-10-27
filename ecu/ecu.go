@@ -12,7 +12,7 @@ type Instance struct {
 }
 
 // Data from http://www.ec2instances.info
-var instances = []Instance{
+var instances = []*Instance{
 	{"c1.medium", 1.7, 50, 2, 2.5, false},
 	{"c1.xlarge", 7.0, 200, 8, 2.5, false},
 	{"c3.2xlarge", 15.0, 280, 8, 3.5, false},
@@ -73,7 +73,7 @@ var instanceLookup map[string]*Instance
 func init() {
 	instanceLookup = make(map[string]*Instance)
 	for _, inst := range instances {
-		instanceLookup[inst.APIName] = &inst
+		instanceLookup[inst.APIName] = inst
 	}
 }
 

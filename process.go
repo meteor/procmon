@@ -16,10 +16,14 @@ import (
 
 // Measure is a point in time measure of a process's resource consumption.
 type Measure struct {
-	// User is the % of usermode CPU time used
-	User float64
-	// System is the % of kernel mode CPU time used
-	System float64
+	// User is the number of usermode CPU jiffies used
+	User uint64
+	// System is the number of kernelmode CPU jiffies used
+	System uint64
+	// UserTotal is the number of usermode CPU jiffies used across all processes
+	UserTotal uint64
+	// SystemTotal is the number of kernelmode CPU jiffies used across all processes
+	SystemTotal uint64
 	// Memory is the amount of memory used in kB
 	Memory uint64
 }
@@ -116,24 +120,39 @@ func parseGlobalStat(in io.Reader) (point, error) {
 		if strings.HasPrefix(s.Text(), "cpu ") {
 			fs := bufio.NewScanner(strings.NewReader(s.Text()))
 			fs.Split(bufio.ScanWords)
-			for i := 0; i < 2; i++ {
-				if !fs.Scan() {
-					return point{}, fmt.Errorf("cpu line ended before user data seen: %q", s.Text())
-				}
+			if !fs.Scan() {
+				return point{}, fmt.Errorf("cpu line ended before user data seen: %q", s.Text())
+			}
+			if fs.Text() != "cpu" {
+				return point{}, fmt.Errorf("Weird cpu line doesn't start with cpu?!: %q", s.Text())
+			}
+			if !fs.Scan() {
+				return point{}, fmt.Errorf("cpu line ended before user data seen: %q", s.Text())
 			}
 			utime, err := strconv.ParseUint(fs.Text(), 10, 64)
 			if err != nil {
 				return point{}, err
 			}
-			for i := 0; i < 2; i++ {
-				if !fs.Scan() {
-					return point{}, fmt.Errorf("cpu line ended before system data seen: %q", s.Text())
-				}
+			if !fs.Scan() {
+				return point{}, fmt.Errorf("cpu line ended before user niced data seen: %q", s.Text())
+			}
+			unicetime, err := strconv.ParseUint(fs.Text(), 10, 64)
+			if err != nil {
+				return point{}, err
+			}
+			utime += unicetime
+			if !fs.Scan() {
+				return point{}, fmt.Errorf("cpu line ended before system data seen: %q", s.Text())
 			}
 			stime, err := strconv.ParseUint(fs.Text(), 10, 64)
 			if err != nil {
 				return point{}, err
 			}
+			log.WithFields(log.Fields{
+				"raw":  s.Text(),
+				"user": utime,
+				"sys":  stime,
+			}).Debug("reading /proc/stat")
 			return point{utime, stime}, nil
 		}
 	}
@@ -211,25 +230,21 @@ func (m *Monitor) Monitor() {
 				close(m.Output)
 				return
 			}
-			userTotalDiff := newtotal.user - m.total.user
-			sysTotalDiff := newtotal.system - m.total.system
 
-			var userPerc, sysPerc float64
-			if userTotalDiff == 0 {
-				userPerc = 0.0
-			} else {
-				userPerc = 100.0 * float64(newtarget.user-m.stats.user) /
-					float64(userTotalDiff)
-			}
-			if sysTotalDiff == 0 {
-				sysPerc = 0.0
-			} else {
-				sysPerc = 100.0 * float64(newtarget.system-m.stats.system) /
-					float64(sysTotalDiff)
-			}
-
+			log.WithFields(log.Fields{
+				"new total":  newtotal,
+				"new target": newtarget,
+				"old total":  m.total,
+				"old target": m.stats,
+			}).Debug("tick")
 			select {
-			case m.Output <- Measure{userPerc, sysPerc, memory}:
+			case m.Output <- Measure{
+				newtarget.user - m.stats.user,
+				newtarget.system - m.stats.system,
+				newtotal.user - m.total.user,
+				newtotal.system - m.total.system,
+				memory,
+			}:
 			default:
 				log.WithField("process", m.process).Warn("Output full, dropping update")
 			}
