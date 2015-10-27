@@ -47,12 +47,12 @@ outerloop:
 			if point.UserTotal == 0 {
 				userPerc = 0.0
 			} else {
-				userPerc = 100.0 * float64(point.User) / float64(point.UserTotal)
+				userPerc = 100.0 * float64(point.User) / float64(userSysTotal)
 			}
 			if point.SystemTotal == 0 {
 				sysPerc = 0.0
 			} else {
-				sysPerc = 100.0 * float64(point.System) / float64(point.SystemTotal)
+				sysPerc = 100.0 * float64(point.System) / float64(userSysTotal)
 			}
 			if instance == nil {
 				userECU = math.NaN()
@@ -69,7 +69,6 @@ outerloop:
 				sysECU = float64(instance.ComputeUnitsx10) * float64(point.System) / (float64(userSysTotal) * 10.0)
 			}
 			log.WithFields(log.Fields{
-				"point":      point,
 				"user":       userPerc,
 				"system":     sysPerc,
 				"userInECU":  userECU,
