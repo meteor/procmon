@@ -5,6 +5,8 @@ import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/meteor/procmon"
+	"github.com/meteor/procmon/ecu"
+	"math"
 	"strconv"
 )
 
@@ -18,6 +20,13 @@ func main() {
 	process, err := strconv.ParseInt(flag.Arg(0), 10, 32)
 	if err != nil {
 		log.WithField("input", flag.Arg(0)).WithError(err).Fatal("Couldn't parse input process")
+	}
+
+	instance, err := ecu.Mine()
+	if err == nil {
+		log.WithField("type", instance.APIName)
+	} else {
+		log.WithError(err).Error("Couldn't find instance metadata")
 	}
 
 	output := make(chan procmon.Measure, 1)
@@ -35,10 +44,20 @@ outerloop:
 				log.Warn("Not ok, breaking")
 				break outerloop
 			}
+			var userScaled, systemScaled float64
+			if instance == nil {
+				userScaled = math.NaN()
+				systemScaled = math.NaN()
+			} else {
+				userScaled = float64(instance.ComputeUnitsx10) * point.User / 10.0
+				systemScaled = float64(instance.ComputeUnitsx10) * point.System / 10.0
+			}
 			log.WithFields(log.Fields{
-				"user":   point.User,
-				"system": point.System,
-				"memory": point.Memory,
+				"user":      point.User,
+				"system":    point.System,
+				"userInECU": userScaled,
+				"sysInECU":  systemScaled,
+				"memory":    point.Memory,
 			}).Info("Got point")
 		}
 	}
