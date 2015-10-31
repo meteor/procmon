@@ -6,7 +6,6 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/meteor/procmon"
 	"github.com/meteor/procmon/ecu"
-	"math"
 	"strconv"
 )
 
@@ -42,37 +41,11 @@ outerloop:
 				log.Warn("Not ok, breaking")
 				break outerloop
 			}
-			userSysTotal := point.UserTotal + point.SystemTotal
-			var userPerc, sysPerc, userECU, sysECU float64
-			if point.UserTotal == 0 {
-				userPerc = 0.0
-			} else {
-				userPerc = 100.0 * float64(point.User) / float64(userSysTotal)
-			}
-			if point.SystemTotal == 0 {
-				sysPerc = 0.0
-			} else {
-				sysPerc = 100.0 * float64(point.System) / float64(userSysTotal)
-			}
-			if instance == nil {
-				userECU = math.NaN()
-				sysECU = math.NaN()
-			} else {
-				log.WithFields(log.Fields{
-					"instance":     instance,
-					"instance CPU": instance.ComputeUnitsx10,
-					"userSysTotal": userSysTotal,
-					"numerator":    float64(instance.ComputeUnitsx10) * float64(point.User),
-					"denominator":  (float64(userSysTotal) * 10.0),
-				}).Debug("computing")
-				userECU = float64(instance.ComputeUnitsx10) * float64(point.User) / (float64(userSysTotal) * 10.0)
-				sysECU = float64(instance.ComputeUnitsx10) * float64(point.System) / (float64(userSysTotal) * 10.0)
-			}
 			log.WithFields(log.Fields{
-				"user":       userPerc,
-				"system":     sysPerc,
-				"userInECU":  userECU,
-				"sysInECU":   sysECU,
+				"user":       point.UserPerc(),
+				"system":     point.SysPerc(),
+				"userInECU":  point.UserInECU(instance),
+				"sysInECU":   point.SysInECU(instance),
 				"memoryInKB": point.Memory,
 			}).Info("Got point")
 		}
