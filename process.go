@@ -24,6 +24,8 @@ type Measure struct {
 	UserTotal uint64
 	// SystemTotal is the number of kernelmode CPU jiffies used across all processes
 	SystemTotal uint64
+	// IdleTotal is the number of CPU jiffies spent in the idle task.
+	IdleTotal uint64
 	// Memory is the amount of memory used in kB
 	Memory uint64
 }
@@ -32,6 +34,7 @@ type Measure struct {
 type point struct {
 	user   uint64
 	system uint64
+	idle   uint64
 }
 
 // Monitor represents a continuous monitoring of a given Linux
@@ -90,7 +93,7 @@ func parseProcStat(in io.Reader) (point, error) {
 	if err != nil {
 		return point{}, err
 	}
-	return point{cutime, cstime}, nil
+	return point{cutime, cstime, 0}, nil
 }
 
 func parseMemStat(in io.Reader) (uint64, error) {
@@ -148,12 +151,20 @@ func parseGlobalStat(in io.Reader) (point, error) {
 			if err != nil {
 				return point{}, err
 			}
+			if !fs.Scan() {
+				return point{}, fmt.Errorf("cpu line ended before idle data seen: %q", s.Text())
+			}
+			itime, err := strconv.ParseUint(fs.Text(), 10, 64)
+			if err != nil {
+				return point{}, err
+			}
 			log.WithFields(log.Fields{
 				"raw":  s.Text(),
 				"user": utime,
 				"sys":  stime,
+				"idle": itime,
 			}).Debug("reading /proc/stat")
-			return point{utime, stime}, nil
+			return point{utime, stime, itime}, nil
 		}
 	}
 	return point{}, fmt.Errorf("No line starting with 'cpu' seen")
@@ -243,6 +254,7 @@ func (m *Monitor) Monitor() {
 				newtarget.system - m.stats.system,
 				newtotal.user - m.total.user,
 				newtotal.system - m.total.system,
+				newtotal.idle - m.total.idle,
 				memory,
 			}:
 			default:
