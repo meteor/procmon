@@ -15,8 +15,14 @@ import "fmt"
 const syslogActionSizeBuffer = 10
 const syslogActionReadAll = 3
 
+// State is an opaque datatype representing whatever state is needed
+// for the dmesg parser.
+type State struct {
+	bootTime time.Time
+}
+
 // Current retrieves the current contents of the kernel message ring buffer.
-func Current() ([]byte, error) {
+func (s *State) Current() ([]byte, error) {
 	size, err := unix.Klogctl(syslogActionSizeBuffer, nil)
 	if err != nil {
 		return nil, err
@@ -47,14 +53,21 @@ func uptime() (time.Time, error) {
 	return time.Unix(0, 0), fmt.Errorf("Did not find btime declaration in /proc/stat")
 }
 
-// ParseMessages reads dmesg type messages out of buffer.  To do so it
-// must read the system boot time out of /proc/stat, because dmesg
-// timestamps are relative to when the system booted.
-func ParseMessages(buffer []byte) ([]*Message, error) {
-	bootTime, err := uptime()
+// New creates a new State.
+func New() (*State, error) {
+	var err error
+	s := State{}
+	s.bootTime, err = uptime()
 	if err != nil {
 		return nil, err
 	}
+	return &s, nil
+}
+
+// ParseMessages reads dmesg type messages out of buffer.  To do so it
+// must read the system boot time out of /proc/stat, because dmesg
+// timestamps are relative to when the system booted.
+func (s *State) ParseMessages(buffer []byte) ([]*Message, error) {
 	buf := bytes.NewBuffer(buffer)
 	var result []*Message
 	var lastMessage *Message
@@ -95,7 +108,7 @@ func ParseMessages(buffer []byte) ([]*Message, error) {
 			if err != nil && err != io.EOF {
 				return nil, err
 			}
-			adjustedTime := time.Unix(secs, nanosecs).Add(time.Second * time.Duration(bootTime.Unix()))
+			adjustedTime := time.Unix(secs, nanosecs).Add(time.Second * time.Duration(s.bootTime.Unix()))
 			result = append(result, &Message{
 				level,
 				adjustedTime,

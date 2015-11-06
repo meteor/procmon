@@ -12,12 +12,12 @@ type Message struct {
 
 // Messages retrieves all kernel ring buffer messages and returns
 // them, or a reason why it could not.
-func Messages() ([]*Message, error) {
-	buffer, err := Current()
+func (s *State) Messages() ([]*Message, error) {
+	buffer, err := s.Current()
 	if err != nil {
 		return nil, err
 	}
-	messages, err := ParseMessages(buffer)
+	messages, err := s.ParseMessages(buffer)
 	if err != nil {
 		return nil, err
 	}
