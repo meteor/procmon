@@ -1,7 +1,9 @@
 package dmesg
 
-import "time"
-import "log"
+import (
+  "time"
+  log "github.com/Sirupsen/logrus"
+)
 
 // Stream creates a goroutine that, every sampleTime ticks, will send
 // new dmesg messages to out.  It also listens on stop, in case you
@@ -24,7 +26,7 @@ func doStream(state *State, out chan<- *Message, stop <-chan bool, sampleTime ti
 	for _ = range ticker.C {
 		select {
 		case <-stop:
-			log.Println("Terminating as requested")
+			log.Debug("Terminating as requested")
 			return
 		default:
 		}
@@ -39,7 +41,7 @@ func doStream(state *State, out chan<- *Message, stop <-chan bool, sampleTime ti
 				hasSeenLast := false
 				for _, message := range messages {
 					if message.Timestamp.After(lastMessage.Timestamp) {
-						log.Println("missed some, resuming where available")
+						log.Debug("missed some, resuming where available")
 						hasSeenLast = true
 					} else if message == lastMessage {
 						hasSeenLast = true
@@ -51,7 +53,7 @@ func doStream(state *State, out chan<- *Message, stop <-chan bool, sampleTime ti
 				}
 			}
 		} else {
-			log.Println("Messages returned error; hoping it clears up")
+			log.Warning("Messages returned error; hoping it clears up")
 		}
 	}
 }
