@@ -47,7 +47,7 @@ outerloop:
 				"userInECU":  point.UserInECU(instance),
 				"sysInECU":   point.SysInECU(instance),
 				"memoryInKB": point.Memory,
-			}).Info("Got point")
+			}).Debug("Got point")
 		}
 	}
 }
