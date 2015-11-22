@@ -1,8 +1,8 @@
 package dmesg
 
 import (
-  "time"
-  log "github.com/Sirupsen/logrus"
+	log "github.com/Sirupsen/logrus"
+	"time"
 )
 
 // Stream creates a goroutine that, every sampleTime ticks, will send
@@ -53,7 +53,7 @@ func doStream(state *State, out chan<- *Message, stop <-chan bool, sampleTime ti
 				}
 			}
 		} else {
-			log.Warning("Messages returned error; hoping it clears up")
+			log.WithError(err).Warning("Messages returned error; hoping it clears up")
 		}
 	}
 }
