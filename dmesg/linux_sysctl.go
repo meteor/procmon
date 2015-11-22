@@ -7,7 +7,6 @@ import "os"
 import "bytes"
 import "io"
 import "golang.org/x/sys/unix"
-import "strings"
 import "time"
 import "fmt"
 
@@ -71,49 +70,47 @@ func (s *State) ParseMessages(buffer []byte) ([]*Message, error) {
 	buf := bytes.NewBuffer(buffer)
 	var result []*Message
 	var lastMessage *Message
+	lastTimestamp := time.Unix(0, 0)
 	for {
 		rune, _, err := buf.ReadRune()
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			return nil, err
+			return result, err
 		}
 		if rune == ' ' {
 			// continuation line
 			line, err := buf.ReadString('\n')
 			if err != nil {
-				return nil, err
+				return result, err
 			}
 			if lastMessage == nil {
-				return nil, fmt.Errorf("First line in ring buffer was a continuation line!")
+				return result, fmt.Errorf("First line in ring buffer was a continuation line!")
 			}
 			lastMessage.Message += line[:len(line)-1]
 		} else {
 			if err := buf.UnreadRune(); err != nil {
-				return nil, err
+				return result, err
 			}
-			line, err := buf.ReadString(']')
+			line, err := buf.ReadString('\n')
 			if err != nil {
-				return nil, err
+				return result, err
 			}
-			var level, secs, nanosecs int64
-			matched, err := fmt.Sscanf(line, "<%d>[%d.%d]", &level, &secs, &nanosecs)
+
+			message, err := parseMessage(line)
 			if err != nil {
-				return nil, err
+				return result, err
 			}
-			if matched != 3 {
-				return nil, fmt.Errorf("Couldn't parse line %q for some reason", line)
+
+			if message.Timestamp == time.Unix(0, 0) {
+				message.Timestamp = lastTimestamp
+			} else {
+				adjustedTime := message.Timestamp.Add(time.Second * time.Duration(s.bootTime.Unix()))
+				message.Timestamp = adjustedTime
+				lastTimestamp = message.Timestamp
 			}
-			message, err := buf.ReadString('\n')
-			if err != nil && err != io.EOF {
-				return nil, err
-			}
-			adjustedTime := time.Unix(secs, nanosecs).Add(time.Second * time.Duration(s.bootTime.Unix()))
-			result = append(result, &Message{
-				level,
-				adjustedTime,
-				strings.TrimSuffix(message[1:], "\n"),
-			})
+
+			result = append(result, message)
 		}
 	}
 	return result, nil
