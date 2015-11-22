@@ -19,10 +19,45 @@ func Stream(out chan<- *Message, stop <-chan bool, sampleTime time.Duration) err
 	return nil
 }
 
+func doTick(state *State, out chan<- *Message, lastMessage *Message) (*Message, error) {
+	messages, err := state.Messages()
+	if err != nil {
+		return nil, err
+	}
+
+	if lastMessage == nil {
+		for _, message := range messages {
+			lastMessage = message
+			out <- message
+		}
+	} else {
+		hasSeenLast := false
+		for _, message := range messages {
+			if message.Timestamp.After(lastMessage.Timestamp) {
+				log.Debug("missed some, resuming where available")
+				hasSeenLast = true
+			} else if message == lastMessage {
+				hasSeenLast = true
+			}
+			if hasSeenLast {
+				lastMessage = message
+				out <- message
+			}
+		}
+	}
+
+	return lastMessage, nil
+}
+
 func doStream(state *State, out chan<- *Message, stop <-chan bool, sampleTime time.Duration) {
 	var lastMessage *Message
+	var err error
 	ticker := time.NewTicker(sampleTime)
 	defer ticker.Stop()
+	lastMessage, err = doTick(state, out, lastMessage)
+	if err != nil {
+		log.WithError(err).Warning("Messages returned error; hoping it clears up")
+	}
 	for _ = range ticker.C {
 		select {
 		case <-stop:
@@ -30,29 +65,8 @@ func doStream(state *State, out chan<- *Message, stop <-chan bool, sampleTime ti
 			return
 		default:
 		}
-		messages, err := state.Messages()
-		if err == nil {
-			if lastMessage == nil {
-				for _, message := range messages {
-					lastMessage = message
-					out <- message
-				}
-			} else {
-				hasSeenLast := false
-				for _, message := range messages {
-					if message.Timestamp.After(lastMessage.Timestamp) {
-						log.Debug("missed some, resuming where available")
-						hasSeenLast = true
-					} else if message == lastMessage {
-						hasSeenLast = true
-					}
-					if hasSeenLast {
-						lastMessage = message
-						out <- message
-					}
-				}
-			}
-		} else {
+		lastMessage, err = doTick(state, out, lastMessage)
+		if err != nil {
 			log.WithError(err).Warning("Messages returned error; hoping it clears up")
 		}
 	}
